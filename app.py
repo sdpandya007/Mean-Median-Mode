@@ -3,129 +3,327 @@ import statistics
 from collections import Counter
 import math
 
-st.title("📊 Mean, Median, Mode Calculator (Grouped Data with Detailed Steps)")
+st.title("📊 Mean, Median, Mode Calculator (Grouped & Individual Data with Detailed Steps)")
 
 st.sidebar.header("📝 Instructions")
 st.sidebar.write("""
+**For Grouped Data:**
 1. Enter class intervals (e.g., 0-10, 10-20) in first box
 2. Enter corresponding frequencies in second box
 3. Values and frequencies must be separated by commas
 4. Both must have same number of entries
+
+**For Individual Data:**
+1. Enter individual data points separated by commas
+2. Each value represents one observation
+3. Data will be automatically sorted and analyzed
 """)
 
-# Input data values and frequencies
-col1, col2 = st.columns(2)
+# Data input mode selection
+data_mode = st.radio("Select Data Input Mode:", 
+                    ["Grouped Data", "Individual Data"], 
+                    horizontal=True)
 
-with col1:
-    data_values = st.text_area("Enter class intervals (e.g., 0-10, 10-20):", 
-                              value="0-10, 10-20, 20-30, 30-40, 40-50")
-with col2:
-    data_freq = st.text_area("Enter corresponding frequencies (fᵢ):", 
-                            value="5, 8, 12, 7, 3")
+if data_mode == "Grouped Data":
+    # Input data values and frequencies
+    col1, col2 = st.columns(2)
 
-calculate_clicked = st.button("🚀 Calculate", type="primary")
+    with col1:
+        data_values = st.text_area("Enter class intervals (e.g., 0-10, 10-20):", 
+                                  value="0-10, 10-20, 20-30, 30-40, 40-50")
+    with col2:
+        data_freq = st.text_area("Enter corresponding frequencies (fᵢ):", 
+                                value="5, 8, 12, 7, 3")
 
-def parse_class_interval(interval_str):
-    """Parse class interval string and return midpoint"""
+    calculate_clicked = st.button("🚀 Calculate", type="primary")
+
+    def parse_class_interval(interval_str):
+        """Parse class interval string and return midpoint"""
+        try:
+            if '-' in interval_str:
+                parts = interval_str.split('-')
+                lower = float(parts[0].strip())
+                upper = float(parts[1].strip())
+                return (lower + upper) / 2, lower, upper, upper - lower
+            else:
+                # Single value
+                val = float(interval_str.strip())
+                return val, val, val, 0
+        except:
+            raise ValueError(f"Invalid class interval: {interval_str}")
+
+    # Convert to lists
     try:
-        if '-' in interval_str:
-            parts = interval_str.split('-')
-            lower = float(parts[0].strip())
-            upper = float(parts[1].strip())
-            return (lower + upper) / 2, lower, upper, upper - lower
+        intervals = [x.strip() for x in data_values.split(',')]
+        freqs = list(map(int, data_freq.split(',')))
+        
+        if len(intervals) != len(freqs):
+            st.error("⚠️ Number of class intervals and frequencies must be equal.")
+            st.stop()
+        if len(intervals) == 0:
+            st.warning("Please enter some data to continue.")
+            st.stop()
+        
+        # Parse class intervals and calculate midpoints
+        class_info = []
+        for interval in intervals:
+            midpoint, lower, upper, width = parse_class_interval(interval)
+            class_info.append({
+                'midpoint': midpoint,
+                'lower': lower,
+                'upper': upper,
+                'width': width
+            })
+        
+        values = [info['midpoint'] for info in class_info]
+        class_widths = [info['width'] for info in class_info]
+        
+        # Auto-detect class width
+        if class_widths:
+            # Use the most common class width
+            h = max(set(class_widths), key=class_widths.count)
+            # If detected width is zero, check if we have any non-zero widths
+            if h == 0:
+                non_zero_widths = [w for w in class_widths if w > 0]
+                h = non_zero_widths[0] if non_zero_widths else 0
         else:
-            # Single value
-            val = float(interval_str.strip())
-            return val, val, val, 0
-    except:
-        raise ValueError(f"Invalid class interval: {interval_str}")
+            h = 0
+        
+    except Exception as e:
+        st.error(f"⚠️ Error parsing data: {e}")
+        st.stop()
 
-# Convert to lists
-try:
-    intervals = [x.strip() for x in data_values.split(',')]
-    freqs = list(map(int, data_freq.split(',')))
-    
-    if len(intervals) != len(freqs):
-        st.error("⚠️ Number of class intervals and frequencies must be equal.")
-        st.stop()
-    if len(intervals) == 0:
-        st.warning("Please enter some data to continue.")
-        st.stop()
-    
-    # Parse class intervals and calculate midpoints
-    class_info = []
-    for interval in intervals:
-        midpoint, lower, upper, width = parse_class_interval(interval)
-        class_info.append({
-            'midpoint': midpoint,
-            'lower': lower,
-            'upper': upper,
-            'width': width
+    # Total observations
+    N = sum(freqs)
+
+    # Display basic information
+    st.subheader("📊 Basic Information")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Number of Classes", len(values))
+    with col2:
+        st.metric("Total Observations (N)", N)
+    with col3:
+        st.metric("Sum of fᵢxᵢ", sum(x*f for x, f in zip(values, freqs)))
+    with col4:
+        st.metric("Class Width (h)", f"{h:.1f}" if h > 0 else "0 (Single values)")
+
+    # Frequency table with detailed calculations
+    st.subheader("📋 Frequency Distribution Table")
+    freq_table_data = []
+    for i, (interval, x, f, info) in enumerate(zip(intervals, values, freqs, class_info), 1):
+        freq_table_data.append({
+            "Class": f"Class {i}",
+            "Class Interval": interval,
+            "Midpoint (xᵢ)": f"{x:.1f}",
+            "Frequency (fᵢ)": f,
+            "fᵢ × xᵢ": f"{x * f:.1f}"
         })
-    
-    values = [info['midpoint'] for info in class_info]
-    class_widths = [info['width'] for info in class_info]
-    
-    # Auto-detect class width
-    if class_widths:
-        # Use the most common class width
-        h = max(set(class_widths), key=class_widths.count)
-        # If detected width is zero, check if we have any non-zero widths
-        if h == 0:
-            non_zero_widths = [w for w in class_widths if w > 0]
-            h = non_zero_widths[0] if non_zero_widths else 0
-    else:
-        h = 0
-    
-except Exception as e:
-    st.error(f"⚠️ Error parsing data: {e}")
-    st.stop()
 
-# Total observations
-N = sum(freqs)
-
-# Display basic information
-st.subheader("📊 Basic Information")
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.metric("Number of Classes", len(values))
-with col2:
-    st.metric("Total Observations (N)", N)
-with col3:
-    st.metric("Sum of fᵢxᵢ", sum(x*f for x, f in zip(values, freqs)))
-with col4:
-    st.metric("Class Width (h)", f"{h:.1f}" if h > 0 else "0 (Single values)")
-
-# Frequency table with detailed calculations
-st.subheader("📋 Frequency Distribution Table")
-freq_table_data = []
-for i, (interval, x, f, info) in enumerate(zip(intervals, values, freqs, class_info), 1):
+    # Add total row
+    total_f = sum(freqs)
+    total_fx = sum(x*f for x, f in zip(values, freqs))
     freq_table_data.append({
-        "Class": f"Class {i}",
-        "Class Interval": interval,
-        "Midpoint (xᵢ)": f"{x:.1f}",
-        "Frequency (fᵢ)": f,
-        "fᵢ × xᵢ": f"{x * f:.1f}"
+        "Class": "**Total**",
+        "Class Interval": "**-**",
+        "Midpoint (xᵢ)": "**-**",
+        "Frequency (fᵢ)": f"**{total_f}**",
+        "fᵢ × xᵢ": f"**{total_fx:.1f}**"
     })
 
-# Add total row
-total_f = sum(freqs)
-total_fx = sum(x*f for x, f in zip(values, freqs))
-freq_table_data.append({
-    "Class": "**Total**",
-    "Class Interval": "**-**",
-    "Midpoint (xᵢ)": "**-**",
-    "Frequency (fᵢ)": f"**{total_f}**",
-    "fᵢ × xᵢ": f"**{total_fx:.1f}**"
-})
+    st.table(freq_table_data)
 
-st.table(freq_table_data)
+    # Select measure
+    choice = st.radio("Select measure to calculate:", ["Mean", "Median", "Mode"], horizontal=True)
 
-# Select measure
-choice = st.radio("Select measure to calculate:", ["Mean", "Median", "Mode"], horizontal=True)
+else:  # Individual Data mode
+    st.subheader("📊 Individual Data Input")
+    
+    individual_data_input = st.text_area("Enter individual data points (comma-separated):", 
+                                        value="12, 15, 18, 22, 25, 25, 28, 30, 32, 35, 35, 35, 40, 42, 45")
+    
+    calculate_clicked = st.button("🚀 Calculate", type="primary")
+    
+    # Process individual data
+    try:
+        individual_data = [float(x.strip()) for x in individual_data_input.split(',') if x.strip()]
+        individual_data.sort()
+        
+        if len(individual_data) == 0:
+            st.warning("Please enter some data to continue.")
+            st.stop()
+            
+        # For individual data, we'll set some default values for compatibility
+        intervals = [f"{x}" for x in individual_data]
+        values = individual_data
+        freqs = [1] * len(individual_data)  # Each value has frequency 1
+        class_info = [{'midpoint': x, 'lower': x, 'upper': x, 'width': 0} for x in individual_data]
+        h = 0
+        N = len(individual_data)
+        total_fx = sum(individual_data)
+        
+    except Exception as e:
+        st.error(f"⚠️ Error parsing data: {e}")
+        st.stop()
+    
+    # Display individual data information
+    st.subheader("📊 Individual Data Information")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Number of Observations", len(individual_data))
+    with col2:
+        st.metric("Sum of all values", f"{sum(individual_data):.1f}")
+    with col3:
+        st.metric("Data Range", f"{min(individual_data):.1f} - {max(individual_data):.1f}")
+    
+    # Display sorted data
+    st.subheader("📋 Individual Data Points (Sorted)")
+    st.write(f"**Sorted data:** {individual_data}")
+    
+    # For individual data, automatically show individual analysis
+    choice = "Individual Data Analysis"
 
-# --- MEAN CALCULATION ---
-if choice == "Mean":
+# --- INDIVIDUAL DATA ANALYSIS ---
+if choice == "Individual Data Analysis":
+    st.header("🎯 Individual Data Analysis - Mean, Median, Mode")
+    
+    # Create expanded individual data from grouped data (if in grouped mode)
+    if data_mode == "Grouped Data":
+        individual_data = []
+        for value, freq in zip(values, freqs):
+            individual_data.extend([value] * freq)
+        individual_data.sort()
+    
+    st.write(f"**Total individual observations:** {len(individual_data)}")
+    st.write(f"**Individual data points (sorted):**")
+    
+    # Display individual data in a readable format
+    if len(individual_data) <= 20:
+        # Show all data points if not too many
+        col1, col2, col3 = st.columns(3)
+        items_per_col = math.ceil(len(individual_data) / 3)
+        
+        with col1:
+            for i in range(min(items_per_col, len(individual_data))):
+                st.write(f"{i+1}. {individual_data[i]:.1f}")
+        with col2:
+            for i in range(items_per_col, min(2*items_per_col, len(individual_data))):
+                st.write(f"{i+1}. {individual_data[i]:.1f}")
+        with col3:
+            for i in range(2*items_per_col, len(individual_data)):
+                st.write(f"{i+1}. {individual_data[i]:.1f}")
+    else:
+        # Show summary for large datasets
+        st.write(f"**First 10 values:** {individual_data[:10]}")
+        st.write(f"**Last 10 values:** {individual_data[-10:]}")
+        st.write(f"*Showing first and last 10 values only (total: {len(individual_data)} points)*")
+    
+    # Calculate and display individual statistics
+    st.subheader("📈 Individual Data Statistics")
+    
+    # MEAN for individual data
+    st.write("### 🎯 Mean (Individual Data)")
+    st.latex(r"\bar{x} = \frac{\Sigma x_i}{N}")
+    
+    sum_individual = sum(individual_data)
+    mean_individual = sum_individual / len(individual_data)
+    
+    if len(individual_data) <= 10:
+        calculation_steps = " + ".join([f"{x:.1f}" for x in individual_data])
+        st.write(f"**Step 1:** Σxᵢ = {calculation_steps} = {sum_individual:.1f}")
+    else:
+        st.write(f"**Step 1:** Σxᵢ = {sum_individual:.1f}")
+    
+    st.write(f"**Step 2:** N = {len(individual_data)}")
+    st.write(f"**Step 3:** Apply formula:")
+    st.latex(r"\bar{x} = \frac{" + f"{sum_individual:.1f}" + "}{" + str(len(individual_data)) + "} = " + f"{mean_individual:.4f}")
+    st.success(f"**Mean (Individual Data) = {mean_individual:.4f}**")
+    
+    # MEDIAN for individual data
+    st.write("### 🎯 Median (Individual Data)")
+    
+    n = len(individual_data)
+    if n % 2 == 1:
+        # Odd number of observations
+        median_pos = (n + 1) // 2
+        median_individual = individual_data[median_pos - 1]
+        st.write(f"**Number of observations (N):** {n} (odd)")
+        st.write(f"**Median position:** (N+1)/2 = ({n}+1)/2 = {median_pos}")
+        st.write(f"**Step:** The {median_pos}th value in sorted data is the median")
+        st.write(f"**Sorted data position {median_pos}:** {median_individual:.1f}")
+    else:
+        # Even number of observations
+        median_pos1 = n // 2
+        median_pos2 = n // 2 + 1
+        median_val1 = individual_data[median_pos1 - 1]
+        median_val2 = individual_data[median_pos2 - 1]
+        median_individual = (median_val1 + median_val2) / 2
+        
+        st.write(f"**Number of observations (N):** {n} (even)")
+        st.write(f"**Median position:** Average of {n//2}th and {n//2 + 1}th values")
+        st.write(f"**Step:** ({median_pos1}th value + {median_pos2}th value) / 2")
+        st.write(f"**Calculation:** ({median_val1:.1f} + {median_val2:.1f}) / 2 = {median_individual:.4f}")
+    
+    st.success(f"**Median (Individual Data) = {median_individual:.4f}**")
+    
+    # MODE for individual data
+    st.write("### 🎯 Mode (Individual Data)")
+    
+    # Count frequency of each value
+    value_counts = {}
+    for value in individual_data:
+        value_counts[value] = value_counts.get(value, 0) + 1
+    
+    max_freq = max(value_counts.values())
+    modal_values = [value for value, freq in value_counts.items() if freq == max_freq]
+    
+    st.write("**Frequency distribution of individual values:**")
+    mode_table = []
+    for value, freq in sorted(value_counts.items()):
+        mode_table.append({
+            "Value": f"{value:.1f}",
+            "Frequency": freq,
+            "Remarks": "**Mode**" if freq == max_freq else ""
+        })
+    
+    st.table(mode_table)
+    
+    if len(modal_values) == 1:
+        st.write(f"**Mode:** The value that appears most frequently = {modal_values[0]:.1f} (appears {max_freq} times)")
+        st.success(f"**Mode (Individual Data) = {modal_values[0]:.1f}**")
+    else:
+        st.write(f"**Multiple modes:** Values that appear most frequently = {', '.join([f'{v:.1f}' for v in modal_values])} (each appears {max_freq} times)")
+        st.success(f"**Modes (Individual Data) = {', '.join([f'{v:.1f}' for v in modal_values])}**")
+    
+    # Additional statistics
+    st.write("### 📊 Additional Statistics")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Minimum", f"{min(individual_data):.1f}")
+    with col2:
+        st.metric("Maximum", f"{max(individual_data):.1f}")
+    with col3:
+        st.metric("Range", f"{max(individual_data) - min(individual_data):.1f}")
+    with col4:
+        st.metric("Sum", f"{sum(individual_data):.1f}")
+    
+    # Summary
+    st.subheader("📊 Summary - Individual Data")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Mean", f"{mean_individual:.4f}")
+    with col2:
+        st.metric("Median", f"{median_individual:.4f}")
+    with col3:
+        if len(modal_values) == 1:
+            st.metric("Mode", f"{modal_values[0]:.1f}")
+        else:
+            st.metric("Modes", f"{len(modal_values)} values")
+    
+   
+
+# --- MEAN CALCULATION (Grouped Data) ---
+elif choice == "Mean" and data_mode == "Grouped Data":
     st.header("🎯 Mean Calculation - All Methods")
     
     # Let user choose which method to display
@@ -246,8 +444,8 @@ if choice == "Mean":
             st.latex(r"= " + f"{A_step:.1f}" + " + " + f"({sum_fd/N:.4f}) × {h} = {mean_step:.4f}")
             st.success(f"**Mean (Step Deviation Method) = {mean_step:.4f}**")
 
-# --- MEDIAN CALCULATION ---
-elif choice == "Median":
+# --- MEDIAN CALCULATION (Grouped Data) ---
+elif choice == "Median" and data_mode == "Grouped Data":
     st.header("🎯 Median Calculation - Detailed Steps")
     
     # Show auto-detected class width
@@ -262,36 +460,9 @@ elif choice == "Median":
         - The formula involves division and multiplication by h
         
         **Recommended alternatives:**
-        - Use **ungrouped data median** calculation instead
+        - Use **Individual Data Analysis** instead
         - Or enter proper class intervals (e.g., 0-10, 10-20) instead of single values
-        
-        **Ungrouped Median Formula:**
-        For individual values, median is the middle value when data is sorted
         """)
-        
-        # Calculate ungrouped median as alternative
-        st.subheader("📌 Alternative: Ungrouped Median Calculation")
-        
-        # Create expanded frequency list
-        expanded_data = []
-        for value, freq in zip(values, freqs):
-            expanded_data.extend([value] * freq)
-        
-        expanded_data.sort()
-        st.write(f"**Sorted data:** {expanded_data}")
-        
-        if len(expanded_data) % 2 == 1:
-            # Odd number of observations
-            median_ungrouped = expanded_data[len(expanded_data) // 2]
-            st.write(f"**Median position:** (N+1)/2 = ({len(expanded_data)}+1)/2 = {(len(expanded_data)+1)/2}")
-        else:
-            # Even number of observations
-            mid1 = expanded_data[len(expanded_data) // 2 - 1]
-            mid2 = expanded_data[len(expanded_data) // 2]
-            median_ungrouped = (mid1 + mid2) / 2
-            st.write(f"**Median position:** Average of {len(expanded_data)//2}th and {len(expanded_data)//2 + 1}th values")
-        
-        st.success(f"**Ungrouped Median = {median_ungrouped:.4f}**")
         
     else:
         st.latex(r"\text{Median} = L + \left(\frac{\frac{N}{2} - CF}{f}\right) \times h")
@@ -357,8 +528,8 @@ elif choice == "Median":
         
         st.success(f"**Median = {median:.4f}**")
 
-# --- MODE CALCULATION ---
-elif choice == "Mode":
+# --- MODE CALCULATION (Grouped Data) ---
+elif choice == "Mode" and data_mode == "Grouped Data":
     st.header("🎯 Mode Calculation - Grouped Data Formula")
     
     # Show auto-detected class width
@@ -373,26 +544,9 @@ elif choice == "Mode":
         - The formula involves multiplication by h
         
         **Recommended alternatives:**
-        - Use **ungrouped data mode** calculation instead
+        - Use **Individual Data Analysis** instead
         - Or enter proper class intervals (e.g., 0-10, 10-20) instead of single values
-        
-        **Ungrouped Mode Formula:**
-        For individual values, mode is the value with highest frequency
         """)
-        
-        # Calculate ungrouped mode as alternative
-        st.subheader("📌 Alternative: Ungrouped Mode Calculation")
-        
-        # Find value with highest frequency
-        max_freq = max(freqs)
-        modal_values = [values[i] for i, f in enumerate(freqs) if f == max_freq]
-        
-        if len(modal_values) == 1:
-            st.write(f"**Mode:** Value with highest frequency = {modal_values[0]} (appears {max_freq} times)")
-            st.success(f"**Ungrouped Mode = {modal_values[0]:.1f}**")
-        else:
-            st.write(f"**Multiple modes detected:** {modal_values} (each appears {max_freq} times)")
-            st.success(f"**Ungrouped Modes = {', '.join([f'{v:.1f}' for v in modal_values])}**")
         
     else:
         st.latex(r"Z = L + \left(\frac{f_1 - f_0}{2f_1 - f_0 - f_2}\right) \times h")
